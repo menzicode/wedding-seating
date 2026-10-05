@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // The chart lives at charts/<id>, where <id> is derived from the password in index.html
+    // (PBKDF2-SHA256, 200k iterations). The real id is pasted into the Firebase console only;
+    // it must never be committed, because knowing it is the same as knowing the password.
+    match /charts/PASSWORD_DERIVED_ID {
+      allow get: if true;
+      allow create, update: if request.resource.data.keys().hasOnly(['guests', 'suggested', 'seats', 'extra', 'updatedAt'])
+                            && request.resource.data.seats is map
+                            && request.resource.data.extra is list
+                            && request.resource.data.extra.size() < 100;
+    }
+    // Everything else, including listing documents, is denied.
+  }
+}

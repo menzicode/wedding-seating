@@ -1,0 +1,817 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<title>Rogerson–Menzi Seating</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: guest sidebar on the left, the dining hall drawn to the venue's floor plan on the right (stacks on phones). */
+:root {
+  --bg: #efeee9;
+  --paper: #fbfaf7;
+  --ink: #2f2620;
+  --muted: #7f7368;
+  --line: #ddd7cd;
+  --seat-bg: #f6f3ee;
+  --seat-line: #cfc4b5;
+  --seat-num: #b4a796;
+  --wall: #c9bfb1;
+  --wood: #b5763e;
+  --wood-dark: #6b3d1f;
+  --wood-ink: #fffaf3;
+  --bride: #c25a74;
+  --bride-bg: #f9e8ed;
+  --groom: #3f7389;
+  --groom-bg: #e3eff4;
+  --chip-bg: #ffffff;
+  --sel: #d9982b;
+  --sel-bg: #fbf0d9;
+  --danger: #b93a2b;
+  --water: #cfe4ec;
+  --water-line: #a5c9d6;
+  --water-ink: #46697a;
+  --tip-bg: #2f2620;
+  --tip-ink: #fbfaf7;
+  --display: "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+  --ui: Karla, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1815; --paper: #23201c; --ink: #ece5dc; --muted: #a39686; --line: #3a342d;
+    --seat-bg: #2a2621; --seat-line: #4a4239; --seat-num: #6f6457; --wall: #4a4239;
+    --wood: #9a6232; --wood-dark: #5c3319; --wood-ink: #fff6ea;
+    --bride: #e0849b; --bride-bg: #3a2329; --groom: #78aec4; --groom-bg: #1f3038; --chip-bg: #2d2925;
+    --sel: #e6ad4a; --sel-bg: #3b301c; --danger: #e0705f;
+    --water: #23383f; --water-line: #36535d; --water-ink: #9cc3d1;
+    --tip-bg: #ece5dc; --tip-ink: #1b1815;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1b1815; --paper: #23201c; --ink: #ece5dc; --muted: #a39686; --line: #3a342d;
+  --seat-bg: #2a2621; --seat-line: #4a4239; --seat-num: #6f6457; --wall: #4a4239;
+  --wood: #9a6232; --wood-dark: #5c3319; --wood-ink: #fff6ea;
+  --bride: #e0849b; --bride-bg: #3a2329; --groom: #78aec4; --groom-bg: #1f3038; --chip-bg: #2d2925;
+  --sel: #e6ad4a; --sel-bg: #3b301c; --danger: #e0705f;
+  --water: #23383f; --water-line: #36535d; --water-ink: #9cc3d1;
+  --tip-bg: #ece5dc; --tip-ink: #1b1815;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 14px/1.4 var(--ui);
+  display: grid; grid-template-columns: 300px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "side top" "side main";
+}
+header {
+  grid-area: top; display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap;
+  padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--paper);
+}
+header h1 { font: 600 26px/1.05 var(--display); margin: 0 auto 0 0; text-wrap: balance; }
+header h1 small { display: block; font: 500 12px var(--ui); color: var(--muted); letter-spacing: .4px; margin-top: 3px; }
+.status { font-size: 12px; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
+.status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.status.live::before { background: #4c9a6a; }
+.status.busy::before { background: var(--sel); }
+.status.warn::before { background: var(--danger); }
+button {
+  font: 600 12.5px var(--ui); color: var(--ink); background: var(--paper);
+  border: 1px solid var(--line); border-radius: 7px; padding: 7px 12px; cursor: pointer;
+}
+button:hover { border-color: var(--muted); }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, .chip:focus-visible { outline: 2px solid var(--sel); outline-offset: 2px; }
+button.primary { background: var(--wood-dark); color: var(--wood-ink); border-color: var(--wood-dark); }
+button.armed { background: var(--danger); color: #fff; border-color: var(--danger); }
+.tools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.zoom { display: flex; gap: 4px; }
+.zoom button { padding: 6px 10px; }
+
+/* sidebar */
+aside {
+  grid-area: side; background: var(--paper); border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+}
+aside .head { padding: 16px 16px 12px; border-bottom: 1px solid var(--line); display: grid; gap: 10px; }
+aside h2 { font: 600 21px var(--display); margin: 0; }
+.stats { display: flex; gap: 14px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.stats b { color: var(--ink); font-weight: 700; }
+input[type=search], input[type=text], select, textarea {
+  width: 100%; font: 13.5px var(--ui); padding: 8px 10px; border: 1px solid var(--line);
+  border-radius: 7px; background: var(--chip-bg); color: var(--ink);
+}
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.legend .b::before { background: var(--bride); }
+.legend .g::before { background: var(--groom); }
+#pool { flex: 1; overflow-y: auto; padding: 4px 12px 20px; min-height: 0; transition: background .15s; }
+#pool.over { background: var(--sel-bg); }
+.pool-empty { color: var(--muted); text-align: center; padding: 26px 12px; font-style: italic; border: 1px dashed var(--line); border-radius: 10px; }
+.party { display: grid; gap: 4px; margin-bottom: 12px; }
+.party-name {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .7px; color: var(--muted);
+  margin: 0 2px; display: flex; justify-content: space-between; cursor: grab;
+}
+.party-name:hover { color: var(--ink); }
+.section-title { font: 600 16px var(--display); margin: 12px 2px 8px; }
+.add { padding: 12px 16px 16px; border-top: 1px solid var(--line); display: grid; gap: 6px; }
+.add-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.found { padding: 4px 12px 0; }
+.found-item { display: flex; justify-content: space-between; gap: 8px; padding: 6px 4px; border-bottom: 1px dotted var(--line); cursor: pointer; }
+.found-item:hover { color: var(--wood); }
+.found-item em { color: var(--muted); font-style: normal; white-space: nowrap; }
+
+/* guest chip */
+.chip {
+  display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 7px;
+  background: var(--chip-bg); border: 1px solid var(--line); cursor: grab; user-select: none;
+  border-left: 4px solid var(--muted); min-width: 0;
+}
+.chip.Bride { border-left-color: var(--bride); background: var(--bride-bg); }
+.chip.Groom { border-left-color: var(--groom); background: var(--groom-bg); }
+.chip .nm { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip .rel { margin-left: auto; color: var(--muted); font-size: 11px; }
+.chip.selected { outline: 2px solid var(--sel); outline-offset: 1px; }
+.chip.partymate { box-shadow: 0 0 0 2px var(--sel); }
+.chip.dragging { opacity: .4; }
+.chip.match { outline: 2px solid var(--wood); animation: pulse 1.2s ease-in-out 3; }
+@keyframes pulse { 50% { transform: scale(1.1); } }
+@media (prefers-reduced-motion: reduce) { .chip.match { animation: none; } }
+
+/* floor */
+main { grid-area: main; overflow: auto; min-height: 0; padding: 16px; }
+#stage { transform-origin: 0 0; position: relative; }
+#floor {
+  position: absolute; left: 0; top: 0; width: 2420px; height: 1560px;
+  background: var(--paper); border-radius: 14px; border: 1px solid var(--line);
+}
+.room-label { position: absolute; font: 600 21px var(--display); color: var(--muted); pointer-events: none; }
+.zone { position: absolute; border: 2px dashed var(--wall); border-radius: 10px; pointer-events: none; }
+.wall { position: absolute; background: var(--wall); pointer-events: none; border-radius: 2px; }
+.feature { position: absolute; display: grid; place-items: center; text-align: center; border-radius: 8px; font-size: 12px; color: var(--muted); pointer-events: none; }
+.feature.exit { color: var(--danger); font-weight: 700; letter-spacing: 1px; border: 2px dashed var(--danger); }
+.feature.screen { background: var(--ink); color: var(--paper); font-size: 11px; letter-spacing: 3px; border-radius: 3px; }
+.feature.hearth { background: var(--seat-bg); border: 1px solid var(--line); }
+.feature.coffee { background: var(--seat-bg); border: 1px solid var(--line); transform: rotate(-25deg); }
+.feature.blue { background: var(--water); border: 1px solid var(--water-line); color: var(--water-ink); }
+
+.table {
+  position: absolute; background: var(--wood); color: var(--wood-ink); border-radius: 6px;
+  display: grid; place-items: center; font: 700 28px var(--display);
+  box-shadow: inset 0 -3px 0 rgb(0 0 0 / .15);
+}
+.table.dark { background: var(--wood-dark); }
+.table.over { outline: 3px solid var(--sel); outline-offset: 3px; }
+.table .tcount { position: absolute; bottom: 3px; right: 8px; font: 600 11px var(--ui); opacity: .85; font-variant-numeric: tabular-nums; }
+.seat {
+  position: absolute; width: 104px; height: 46px; border-radius: 9px;
+  border: 1.5px dashed var(--seat-line); background: var(--seat-bg); display: flex;
+}
+.seat .num { margin: auto; color: var(--seat-num); font-size: 11px; font-variant-numeric: tabular-nums; }
+.seat.over { border-color: var(--sel); background: var(--sel-bg); border-style: solid; }
+.seat.target { border-color: var(--sel); }
+.seat .chip {
+  width: 100%; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0;
+  padding: 3px 7px; font-size: 12.5px; line-height: 1.15;
+}
+.seat .chip .nm { max-width: 100%; }
+.seat .chip .ln { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.seat .chip .rel { display: none; }
+
+#tip {
+  position: fixed; z-index: 10; pointer-events: none; background: var(--tip-bg); color: var(--tip-ink);
+  padding: 7px 10px; border-radius: 7px; font-size: 12px; line-height: 1.45; max-width: 270px; opacity: 0;
+}
+#toast {
+  position: fixed; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
+  background: var(--tip-bg); color: var(--tip-ink); padding: 9px 16px; border-radius: 8px; opacity: 0;
+  transition: opacity .2s; pointer-events: none; z-index: 11; max-width: calc(100% - 32px);
+}
+#toast.show { opacity: 1; }
+.hint { color: var(--muted); font-size: 12px; flex-basis: 100%; }
+
+#csv-panel {
+  position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .45); display: grid; place-items: center; padding: 16px;
+}
+#csv-panel .box {
+  background: var(--paper); border-radius: 12px; padding: 18px; width: min(640px, 100%); display: grid; gap: 10px;
+}
+#csv-panel h3 { margin: 0; font: 600 22px var(--display); }
+#csv-panel p { margin: 0; color: var(--muted); }
+#csv-text { height: 260px; font: 12px ui-monospace, Menlo, monospace; resize: vertical; }
+#csv-panel .row { display: flex; gap: 8px; justify-content: flex-end; }
+
+#lock { position: fixed; inset: 0; z-index: 30; background: var(--bg); display: grid; place-items: center; padding: 16px; }
+#lock .box { background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 28px; width: min(380px, 100%); display: grid; gap: 10px; }
+#lock h2 { margin: 0 0 4px; font: 600 30px/1.05 var(--display); text-wrap: balance; }
+#lock p { margin: 0; color: var(--muted); }
+#lock label { font-size: 12px; font-weight: 600; letter-spacing: .4px; }
+#lock-error { color: var(--danger) !important; min-height: 1.4em; font-size: 13px; }
+#lock button { padding: 10px 14px; font-size: 14px; }
+
+@media (max-width: 820px) {
+  body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: "top" "side" "main"; }
+  aside { border-right: 0; border-bottom: 1px solid var(--line); max-height: 38vh; }
+  .add { display: none; }
+  header { padding: 10px 16px; }
+  header h1 { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<aside>
+  <div class="head">
+    <h2>Guests</h2>
+    <div class="stats"><span><b id="st-seated">0</b> seated</span><span><b id="st-unseated">0</b> unseated</span><span><b id="st-open">0</b> open seats</span></div>
+    <input type="search" id="search" placeholder="Find a guest or party" autocomplete="off">
+    <div class="legend"><span class="b">Bride's side</span><span class="g">Groom's side</span></div>
+  </div>
+  <div class="found" id="found"></div>
+  <div id="pool"></div>
+  <div class="add">
+    <div class="add-row">
+      <input type="text" id="add-name" placeholder="Add a guest">
+      <input type="text" id="add-party" placeholder="Party (optional)">
+    </div>
+    <div class="add-row">
+      <select id="add-side"><option>Bride</option><option>Groom</option></select>
+      <button id="add-btn">Add to sidebar</button>
+    </div>
+  </div>
+</aside>
+
+<header>
+  <h1>Rogerson ~ Menzi Wedding Dinner<small>SEATING CHART · 15 TABLES</small></h1>
+  <span class="status" id="status">Loading</span>
+  <div class="tools">
+    <div class="zoom">
+      <button id="z-out" aria-label="Zoom out">−</button>
+      <button id="z-fit">Fit</button>
+      <button id="z-in" aria-label="Zoom in">+</button>
+    </div>
+    <button id="undo">Undo</button>
+    <button id="reset">Reset to suggested</button>
+    <button id="clear">Unseat everyone</button>
+    <button class="primary" id="export">Export CSV</button>
+    <button id="lock-btn" title="Forget the password on this device">Lock</button>
+  </div>
+  <span class="hint">Drag a guest to a seat to move them; drop on someone to swap. Or tap a guest, then tap a seat. Drop on a table to take its next free seat.</span>
+</header>
+
+<main id="main"><div id="stage"><div id="floor"></div></div></main>
+<div id="tip"></div>
+<div id="toast" role="status"></div>
+<div id="lock" hidden>
+  <form id="lock-form" class="box">
+    <h2>Rogerson ~ Menzi<br>Wedding Dinner</h2>
+    <p>Enter the password to open the seating chart.</p>
+    <label for="lock-pw">Password</label>
+    <input type="password" id="lock-pw" autocomplete="current-password" required>
+    <p id="lock-error" role="alert"></p>
+    <button class="primary" type="submit">Open chart</button>
+  </form>
+</div>
+<div id="csv-panel" hidden>
+  <div class="box">
+    <h3>Seating chart CSV</h3>
+    <p>Copy this and paste it into a spreadsheet, or save it as a .csv file.</p>
+    <textarea id="csv-text" readonly></textarea>
+    <div class="row"><button id="csv-close">Close</button><button class="primary" id="csv-copy">Copy</button></div>
+  </div>
+</div>
+
+<script>
+let DATA = { guests: [], seats: {} };  // filled from the shared record after unlocking
+const STORE_KEY = 'wedding-seating-v1';
+const DOC_PATH = 'chart/main';
+
+// ---------- floor layout ----------
+// Seats are numbered in circular order: top row left→right, then bottom row right→left.
+const SW = 104, SH = 46, PITCH = 112, BAR = 52, GAP = 8;
+const W = 2420, H = 1560;
+const TABLES = [];
+function hTable(id, x, y, top, bottom, opts = {}) {
+  const n = Math.max(top, bottom), w = n * PITCH - (PITCH - SW);
+  const t = { id, x, y, w, h: BAR, dark: !!opts.dark, seats: [] };
+  if (opts.endLeft) t.seats.push({ x: x - SW - GAP, y: y + (BAR - SH) / 2 });
+  for (let i = 0; i < top; i++) t.seats.push({ x: x + i * PITCH, y: y - SH - GAP });
+  for (let i = bottom - 1; i >= 0; i--) t.seats.push({ x: x + i * PITCH, y: y + BAR + GAP });
+  TABLES.push(t);
+}
+function vTable(id, x, y, left, right) {
+  const VP = 58, w = 64, h = Math.max(left, right) * VP;
+  const t = { id, x, y, w, h, seats: [] };
+  for (let i = 0; i < left; i++) t.seats.push({ x: x - SW - GAP, y: y + i * VP + (VP - SH) / 2 });
+  for (let i = right - 1; i >= 0; i--) t.seats.push({ x: x + w + GAP, y: y + i * VP + (VP - SH) / 2 });
+  TABLES.push(t);
+}
+hTable(2, 150, 300, 5, 5, { dark: true });
+hTable(3, 150, 470, 5, 5, { dark: true });
+hTable(4, 150, 770, 5, 5, { dark: true });
+hTable(5, 150, 940, 5, 5, { dark: true });
+hTable(6, 780, 340, 4, 4);
+hTable(7, 780, 510, 4, 4);
+hTable(8, 780, 680, 4, 4);
+hTable(9, 780, 850, 4, 4);
+hTable(10, 1352, 340, 4, 4, { endLeft: true });
+vTable(1, 1430, 560, 6, 6);
+hTable(11, 1830, 340, 5, 5, { dark: true });
+hTable(12, 1830, 530, 5, 5, { dark: true });
+hTable(13, 1180, 1200, 5, 5, { dark: true });
+hTable(14, 1180, 1370, 5, 4, { dark: true });
+hTable(15, 1850, 1200, 4, 4, { dark: true });
+const CAPACITY = TABLES.reduce((a, t) => a + t.seats.length, 0);
+
+function drawRoom(floor) {
+  const add = (cls, style, html = '') => {
+    const d = document.createElement('div'); d.className = cls; Object.assign(d.style, style); d.innerHTML = html; floor.appendChild(d);
+  };
+  add('feature coffee', { left: '200px', top: '150px', width: '140px', height: '48px' }, 'Coffee &amp; Tea');
+  add('room-label', { left: '430px', top: '60px' }, 'Entry');
+  add('room-label', { left: '980px', top: '30px' }, 'Kitchen');
+  add('room-label', { left: '2060px', top: '40px' }, 'Private Dining Room');
+  add('zone', { left: '2010px', top: '24px', width: '380px', height: '200px' });
+  add('room-label', { left: '40px', top: '640px', writingMode: 'vertical-rl', transform: 'rotate(180deg)', fontSize: '26px' }, 'Patio');
+  add('wall', { left: '110px', top: '230px', width: '4px', height: '880px' });
+  add('wall', { left: '730px', top: '250px', width: '4px', height: '760px' });
+  add('wall', { left: '730px', top: '250px', width: '1240px', height: '4px' });
+  add('feature screen', { left: '880px', top: '226px', width: '320px', height: '18px' }, 'SCREEN');
+  add('feature hearth', { left: '1700px', top: '700px', width: '110px', height: '150px' }, 'Fireplace');
+  add('feature exit', { left: '150px', top: '1110px', width: '120px', height: '44px' }, 'EXIT');
+  add('feature exit', { left: '2200px', top: '760px', width: '120px', height: '44px' }, 'EXIT');
+  add('feature blue', { left: '1850px', top: '1385px', width: '440px', height: '52px' }, 'Unnumbered table');
+}
+
+// ---------- state ----------
+const guests = new Map();
+let seats = {};
+let history = [];
+let selected = null;
+let docRef = null, canWrite = true;
+let writeTimer = null, writing = false, dirty = false;
+
+const seatKey = (t, i) => `${t}-${i}`;
+const guestSeat = id => Object.keys(seats).find(k => seats[k] === id) || null;
+const extras = () => [...guests.values()].filter(g => g.extra);
+
+function applyState(s) {
+  [...guests.values()].filter(g => g.extra).forEach(g => guests.delete(g.id));
+  (s.extra || []).forEach(g => guests.set(g.id, { ...g }));
+  seats = Object.fromEntries(Object.entries(s.seats || {}).filter(([, id]) => guests.has(id)));
+}
+function loadLocal() {
+  DATA.guests.forEach(g => guests.set(g.id, { ...g }));
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) {}
+  if (saved && saved.seats) applyState(saved); else seats = { ...DATA.seats };
+}
+function saveLocal() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify({ seats, extra: extras() })); } catch (e) {}
+}
+
+function setStatus(text, cls) {
+  const s = document.getElementById('status');
+  s.textContent = text; s.className = 'status ' + (cls || '');
+}
+
+// Shared saving: one document holds the whole chart. Writes are coalesced and sent one at a time.
+function scheduleWrite() {
+  if (!docRef || !canWrite) return;
+  dirty = true;
+  setStatus('Saving…', 'busy');
+  clearTimeout(writeTimer);
+  writeTimer = setTimeout(flush, 500);
+}
+async function flush() {
+  if (writing || !dirty) return;
+  writing = true; dirty = false;
+  try {
+    await docRef.update({ seats, extra: extras(), updatedAt: new Date().toISOString() });
+    if (!dirty) setStatus('Saved · shared', 'live');
+  } catch (e) {
+    if (e && (e.code === 'invalid_argument' || e.code === 'permission-denied')) { canWrite = false; setStatus('View only · changes are not saved', 'warn'); }
+    else { dirty = true; setStatus('Not saved yet · retrying', 'warn'); setTimeout(flush, 2000 + Math.random() * 1000); }
+  } finally {
+    writing = false;
+    if (dirty) flush();
+  }
+}
+
+const KEY_STORE = 'wedding-seating-key';
+const SALT = 'rogerson-menzi-seating';
+
+// The password never leaves the browser: it is stretched into the id of the shared record.
+async function deriveKey(password) {
+  const enc = new TextEncoder();
+  const base = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: enc.encode(SALT), iterations: 200000, hash: 'SHA-256' }, base, 256);
+  return [...new Uint8Array(bits)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function applyRecord(d) {
+  DATA = { guests: d.guests || [], seats: d.suggested || {} };
+  guests.clear();
+  DATA.guests.forEach(g => guests.set(g.id, { ...g }));
+  applyState({ seats: d.seats, extra: d.extra });
+}
+
+async function openChart(key) {
+  const ref = firebase.firestore().doc('charts/' + key);
+  let snap;
+  try { snap = await ref.get(); }
+  catch (e) { if (e && e.code === 'permission-denied') return false; throw e; }
+  if (!snap.exists) return false;
+  docRef = ref;
+  applyRecord(snap.data());
+  history = [];
+  document.getElementById('lock').hidden = true;
+  render();
+  setZoom(Math.max(innerWidth < 820 ? 0.45 : 0.75, fitZoom()));
+  setStatus('Saved · shared', 'live');
+  docRef.onSnapshot(snap => {
+    if (snap.metadata.hasPendingWrites || dirty || writing || !snap.exists) return;
+    applyRecord(snap.data());
+    render();
+    setStatus('Saved · shared', 'live');
+  }, () => setStatus('Not connected · changes are not saved', 'warn'));
+  return true;
+}
+
+async function connect() {
+  const lock = document.getElementById('lock');
+  const form = document.getElementById('lock-form');
+  const err = document.getElementById('lock-error');
+  const cfg = window.FIREBASE_CONFIG;
+  if (!cfg || !window.firebase) { err.textContent = 'The chart could not load. Check your connection and reload.'; return; }
+  firebase.initializeApp(cfg);
+  let saved = null;
+  try { saved = localStorage.getItem(KEY_STORE); } catch (e) {}
+  if (saved && await openChart(saved).catch(() => false)) return;
+  lock.hidden = false;
+  document.getElementById('lock-pw').focus();
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = form.querySelector('button');
+    btn.disabled = true; btn.textContent = 'Checking…'; err.textContent = '';
+    try {
+      const key = await deriveKey(document.getElementById('lock-pw').value);
+      if (await openChart(key)) { try { localStorage.setItem(KEY_STORE, key); } catch (e2) {} return; }
+      err.textContent = "That password isn't right. Try again.";
+    } catch (e3) {
+      err.textContent = 'Could not reach the chart. Check your connection and try again.';
+    }
+    btn.disabled = false; btn.textContent = 'Open chart';
+  });
+}
+
+function snapshot() {
+  history.push(JSON.stringify({ seats, extra: extras() }));
+  if (history.length > 100) history.shift();
+}
+function commit() { saveLocal(); scheduleWrite(); render(); }
+function undo() {
+  const prev = history.pop();
+  if (!prev) return toast('Nothing to undo');
+  applyState(JSON.parse(prev)); selected = null; commit();
+}
+
+function moveGuest(id, target) {
+  const from = guestSeat(id);
+  if (from === target) return;
+  snapshot();
+  const occupant = target ? seats[target] : null;
+  if (from) delete seats[from];
+  if (target) seats[target] = id;
+  if (occupant && from) seats[from] = occupant;
+  commit();
+}
+function seatAtTable(ids, tableId) {
+  const t = TABLES.find(t => t.id === tableId);
+  const free = t.seats.map((_, i) => seatKey(t.id, i + 1)).filter(k => !seats[k]);
+  const toPlace = ids.filter(id => !(guestSeat(id) || '').startsWith(tableId + '-'));
+  if (!toPlace.length) return;
+  if (free.length < toPlace.length) return toast(`Table ${tableId} has ${free.length} open seat${free.length === 1 ? '' : 's'}`);
+  snapshot();
+  toPlace.forEach((id, i) => { const f = guestSeat(id); if (f) delete seats[f]; seats[free[i]] = id; });
+  commit();
+}
+function unseat(ids) {
+  const seatedIds = ids.filter(id => guestSeat(id));
+  if (!seatedIds.length) return;
+  snapshot(); seatedIds.forEach(id => delete seats[guestSeat(id)]); commit();
+}
+
+// ---------- rendering ----------
+const floor = document.getElementById('floor');
+const pool = document.getElementById('pool');
+
+function chip(g, full) {
+  const d = document.createElement('div');
+  d.className = `chip ${g.side}`;
+  d.draggable = true;
+  d.tabIndex = 0;
+  d.dataset.id = g.id;
+  const parts = g.name.split(' ');
+  const first = parts.shift();
+  d.innerHTML = '<span class="nm"></span>' + (full ? '' : '<span class="ln"></span>') + '<span class="rel"></span>';
+  d.querySelector('.nm').textContent = full ? g.name : first;
+  if (!full) d.querySelector('.ln').textContent = parts.join(' ');
+  d.querySelector('.rel').textContent = g.rel;
+  if (selected === g.id) d.classList.add('selected');
+  return d;
+}
+
+function render() {
+  floor.innerHTML = '';
+  drawRoom(floor);
+  for (const t of TABLES) {
+    const filled = t.seats.filter((_, i) => seats[seatKey(t.id, i + 1)]).length;
+    const tb = document.createElement('div');
+    tb.className = 'table' + (t.dark ? ' dark' : '');
+    Object.assign(tb.style, { left: t.x + 'px', top: t.y + 'px', width: t.w + 'px', height: t.h + 'px' });
+    tb.dataset.table = t.id;
+    tb.innerHTML = `<span>${t.id}</span><span class="tcount">${filled}/${t.seats.length}</span>`;
+    floor.appendChild(tb);
+    t.seats.forEach((s, i) => {
+      const key = seatKey(t.id, i + 1);
+      const el = document.createElement('div');
+      el.className = 'seat' + (selected ? ' target' : '');
+      el.dataset.seat = key;
+      Object.assign(el.style, { left: s.x + 'px', top: s.y + 'px' });
+      const gid = seats[key];
+      if (gid) el.appendChild(chip(guests.get(gid)));
+      else el.innerHTML = `<span class="num">${t.id}·${i + 1}</span>`;
+      floor.appendChild(el);
+    });
+  }
+  renderPool();
+  const seated = Object.keys(seats).length;
+  document.getElementById('st-seated').textContent = seated;
+  document.getElementById('st-unseated').textContent = guests.size - seated;
+  document.getElementById('st-open').textContent = CAPACITY - seated;
+}
+
+function query() { return document.getElementById('search').value.trim().toLowerCase(); }
+function matches(g, q) { return g.name.toLowerCase().includes(q) || g.party.toLowerCase().includes(q); }
+
+function renderPool() {
+  const seatedIds = new Set(Object.values(seats));
+  const q = query();
+  const unseated = [...guests.values()].filter(g => !seatedIds.has(g.id));
+  pool.innerHTML = '<div class="section-title">Not yet seated</div>';
+  const shown = unseated.filter(g => !q || matches(g, q));
+  if (!shown.length) {
+    const e = document.createElement('div');
+    e.className = 'pool-empty';
+    e.textContent = unseated.length ? 'No unseated guests match.' : 'Everyone has a seat. Drag a guest here to unseat them.';
+    pool.appendChild(e);
+  }
+  const byParty = new Map();
+  shown.forEach(g => { if (!byParty.has(g.party)) byParty.set(g.party, []); byParty.get(g.party).push(g); });
+  [...byParty.keys()].sort().forEach(p => {
+    const box = document.createElement('div');
+    box.className = 'party';
+    const h = document.createElement('div');
+    h.className = 'party-name';
+    h.draggable = true;
+    h.dataset.party = p;
+    h.title = 'Drag onto a table to seat the whole party';
+    h.innerHTML = `<span></span><span>${byParty.get(p).length} ⠿</span>`;
+    h.firstChild.textContent = p;
+    box.appendChild(h);
+    byParty.get(p).forEach(g => box.appendChild(chip(g, true)));
+    pool.appendChild(box);
+  });
+
+  const found = document.getElementById('found');
+  found.innerHTML = '';
+  if (q) {
+    [...guests.values()].filter(g => seatedIds.has(g.id) && matches(g, q)).slice(0, 8).forEach(g => {
+      const [t, s] = guestSeat(g.id).split('-');
+      const r = document.createElement('div');
+      r.className = 'found-item';
+      r.innerHTML = `<span></span><em>Table ${t}, seat ${s}</em>`;
+      r.firstChild.textContent = g.name;
+      r.onclick = () => focusGuest(g.id);
+      found.appendChild(r);
+    });
+  }
+  document.querySelectorAll('#floor .chip').forEach(c => {
+    c.classList.toggle('match', q.length > 1 && matches(guests.get(c.dataset.id), q));
+  });
+}
+
+function focusGuest(id) {
+  const el = floor.querySelector(`.chip[data-id="${id}"]`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+  el.classList.remove('match'); void el.offsetWidth; el.classList.add('match');
+}
+
+// ---------- drag & drop ----------
+let dragData = null;
+document.addEventListener('dragstart', e => {
+  const c = e.target.closest && e.target.closest('.chip, .party-name');
+  if (!c) return;
+  dragData = c.dataset.party ? { party: c.dataset.party } : { id: c.dataset.id };
+  e.dataTransfer.setData('text/plain', JSON.stringify(dragData));
+  e.dataTransfer.effectAllowed = 'move';
+  c.classList.add('dragging');
+  hideTip();
+});
+document.addEventListener('dragend', () => {
+  document.querySelectorAll('.over, .dragging').forEach(x => x.classList.remove('over', 'dragging'));
+  dragData = null;
+});
+const dropTarget = e => e.target.closest && e.target.closest('.seat, .table, #pool');
+document.addEventListener('dragover', e => {
+  const t = dropTarget(e);
+  if (!t || !dragData) return;
+  if (dragData.party && t.classList.contains('seat')) return;
+  e.preventDefault();
+  document.querySelectorAll('.over').forEach(x => x !== t && x.classList.remove('over'));
+  t.classList.add('over');
+});
+document.addEventListener('dragleave', e => {
+  const t = dropTarget(e);
+  if (t && !t.contains(e.relatedTarget)) t.classList.remove('over');
+});
+document.addEventListener('drop', e => {
+  const t = dropTarget(e);
+  if (!t || !dragData) return;
+  e.preventDefault();
+  t.classList.remove('over');
+  const ids = dragData.party
+    ? [...guests.values()].filter(g => g.party === dragData.party && !guestSeat(g.id)).map(g => g.id)
+    : [dragData.id];
+  selected = null;
+  if (t.dataset.seat) moveGuest(ids[0], t.dataset.seat);
+  else if (t.dataset.table) seatAtTable(ids, +t.dataset.table);
+  else unseat(ids);
+});
+
+// ---------- tap to select, tap to place ----------
+document.addEventListener('click', e => {
+  if (e.target.closest('button, input, select, textarea, #csv-panel')) return;
+  const c = e.target.closest('.chip');
+  const seat = e.target.closest('.seat');
+  const table = e.target.closest('.table');
+  if (selected) {
+    const id = selected;
+    if (c && c.dataset.id === id) { selected = null; return render(); }
+    if (seat) { selected = null; return moveGuest(id, seat.dataset.seat); }
+    if (table) { selected = null; return seatAtTable([id], +table.dataset.table); }
+    if (!c && e.target.closest('#pool')) { selected = null; unseat([id]); return render(); }
+  }
+  if (c) { selected = c.dataset.id; hideTip(); render(); }
+  else if (selected) { selected = null; render(); }
+});
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.target.closest('input, textarea')) { e.preventDefault(); undo(); }
+  if (e.key === 'Escape') { if (selected) { selected = null; render(); } closeCsv(); }
+  if (e.key === 'Enter' && e.target.classList && e.target.classList.contains('chip')) e.target.click();
+});
+
+// ---------- tooltip + party highlight ----------
+const tip = document.getElementById('tip');
+function hideTip() { tip.style.opacity = 0; document.querySelectorAll('.partymate').forEach(x => x.classList.remove('partymate')); }
+document.addEventListener('mouseover', e => {
+  const c = e.target.closest && e.target.closest('.chip');
+  if (!c || dragData) return;
+  const g = guests.get(c.dataset.id);
+  if (!g) return;
+  const s = guestSeat(g.id);
+  const mates = [...guests.values()].filter(x => x.party === g.party && x.id !== g.id);
+  const where = id => { const k = guestSeat(id); return k ? `T${k.split('-')[0]}` : 'unseated'; };
+  tip.textContent = '';
+  const b = document.createElement('b'); b.textContent = g.name; tip.appendChild(b);
+  const lines = [`${g.party} · ${g.side}'s side · ${g.rel}`];
+  if (s) lines.push(`Table ${s.split('-')[0]}, seat ${s.split('-')[1]}`);
+  if (mates.length) lines.push('With: ' + mates.map(m => `${m.name} (${where(m.id)})`).join(', '));
+  lines.forEach(l => { tip.appendChild(document.createElement('br')); tip.appendChild(document.createTextNode(l)); });
+  tip.style.opacity = 1;
+  mates.forEach(m => document.querySelectorAll(`.chip[data-id="${m.id}"]`).forEach(x => x.classList.add('partymate')));
+});
+document.addEventListener('mousemove', e => {
+  if (tip.style.opacity !== '1') return;
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - 285) + 'px';
+  tip.style.top = (e.clientY + 16) + 'px';
+});
+document.addEventListener('mouseout', e => {
+  if (e.target.closest && e.target.closest('.chip') && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.chip'))) hideTip();
+});
+
+// ---------- zoom ----------
+const main = document.getElementById('main'), stage = document.getElementById('stage');
+let zoom = 1;
+function setZoom(z) {
+  zoom = Math.max(0.25, Math.min(1.6, z));
+  stage.style.transform = `scale(${zoom})`;
+  stage.style.width = W * zoom + 'px';
+  stage.style.height = H * zoom + 'px';
+}
+const fitZoom = () => Math.min((main.clientWidth - 32) / W, (main.clientHeight - 32) / H);
+document.getElementById('z-in').onclick = () => setZoom(zoom * 1.15);
+document.getElementById('z-out').onclick = () => setZoom(zoom / 1.15);
+document.getElementById('z-fit').onclick = () => setZoom(fitZoom());
+
+// ---------- toolbar ----------
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2400);
+}
+// Two-step buttons: the first click arms, the second within 4 seconds acts.
+function confirmButton(id, label, action) {
+  const btn = document.getElementById(id);
+  let timer = null;
+  btn.onclick = () => {
+    if (btn.classList.contains('armed')) {
+      clearTimeout(timer); btn.classList.remove('armed'); btn.textContent = label; action();
+    } else {
+      btn.classList.add('armed'); btn.textContent = 'Click again to confirm';
+      timer = setTimeout(() => { btn.classList.remove('armed'); btn.textContent = label; }, 4000);
+    }
+  };
+}
+confirmButton('reset', 'Reset to suggested', () => { snapshot(); seats = { ...DATA.seats }; commit(); toast('Suggested seating restored. Undo brings yours back.'); });
+confirmButton('clear', 'Unseat everyone', () => { snapshot(); seats = {}; commit(); toast('Everyone is back in the sidebar. Undo brings them back.'); });
+document.getElementById('undo').onclick = undo;
+document.getElementById('lock-btn').onclick = () => { try { localStorage.removeItem(KEY_STORE); localStorage.removeItem(STORE_KEY); } catch (e) {} location.reload(); };
+document.getElementById('search').addEventListener('input', renderPool);
+document.getElementById('add-btn').onclick = () => {
+  const name = document.getElementById('add-name').value.trim();
+  if (!name) return toast('Type a name first');
+  const party = document.getElementById('add-party').value.trim() || `${name.split(' ').pop()} Party`;
+  const side = document.getElementById('add-side').value;
+  snapshot();
+  const id = 'x' + Date.now().toString(36);
+  guests.set(id, { id, name, party, side, rel: 'Added', extra: true });
+  document.getElementById('add-name').value = '';
+  document.getElementById('add-party').value = '';
+  commit(); toast(`${name} added to the sidebar`);
+};
+document.getElementById('add-name').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('add-btn').click(); });
+
+// ---------- CSV ----------
+const csvCell = v => { v = String(v ?? ''); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; };
+function buildCsv() {
+  const rows = [['Table', 'Seat', 'Guest Name', 'Party', 'Side', 'Relationship']];
+  for (const t of TABLES.slice().sort((a, b) => a.id - b.id)) {
+    t.seats.forEach((_, i) => {
+      const g = guests.get(seats[seatKey(t.id, i + 1)]);
+      if (g) rows.push([t.id, i + 1, g.name, g.party, g.side, g.rel]);
+    });
+  }
+  const seatedIds = new Set(Object.values(seats));
+  [...guests.values()].filter(g => !seatedIds.has(g.id)).forEach(g => rows.push(['Unassigned', '', g.name, g.party, g.side, g.rel]));
+  return rows.map(r => r.map(csvCell).join(',')).join('\n');
+}
+function showCsv(csv) {
+  document.getElementById('csv-text').value = csv;
+  document.getElementById('csv-panel').hidden = false;
+}
+function closeCsv() { document.getElementById('csv-panel').hidden = true; }
+document.getElementById('csv-close').onclick = closeCsv;
+document.getElementById('csv-copy').onclick = () => {
+  const ta = document.getElementById('csv-text');
+  const fallback = () => { ta.focus(); ta.select(); toast('Selected. Press ⌘C to copy.'); };
+  if (navigator.clipboard) navigator.clipboard.writeText(ta.value).then(() => toast('Copied'), fallback); else fallback();
+};
+let downloads;
+document.getElementById('export').onclick = async () => {
+  const csv = buildCsv();
+  if (!window.claude || !window.claude.use) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = 'seating-chart.csv'; a.click();
+    return setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  if (downloads === undefined) downloads = await window.claude.use('downloads');
+  if (!downloads) return showCsv(csv);
+  try {
+    await downloads.save({ filename: 'seating-chart.csv', data: csv });
+    toast('Saved seating-chart.csv');
+  } catch (err) {
+    if (err && err.code === 'declined') return;
+    if (err && err.code === 'rate_limited') return toast('A save prompt is already open');
+    showCsv(csv);
+  }
+};
+
+render();
+setZoom(Math.max(innerWidth < 820 ? 0.45 : 0.75, fitZoom()));
+connect();
+</script>
+
+</body>
+</html>
