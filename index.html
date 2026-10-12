@@ -175,6 +175,9 @@ main { grid-area: main; overflow: auto; min-height: 0; padding: 16px; }
   position: absolute; width: 104px; height: 46px; border-radius: 9px;
   border: 1.5px dashed var(--seat-line); background: var(--seat-bg); display: flex;
 }
+.seat.hc { width: 64px; border-style: dotted; }
+.seat.hc .chip { padding: 3px 5px; }
+.seat.hc .num { text-align: center; line-height: 1.1; }
 .seat .num { margin: auto; color: var(--seat-num); font-size: 11px; font-variant-numeric: tabular-nums; }
 .seat.over { border-color: var(--sel); background: var(--sel-bg); border-style: solid; }
 .seat.target { border-color: var(--sel); }
@@ -296,7 +299,7 @@ const DOC_PATH = 'chart/main';
 
 // ---------- floor layout ----------
 // Seats are numbered in circular order: top row left→right, then bottom row right→left.
-const SW = 104, SH = 46, PITCH = 112, BAR = 52, GAP = 8;
+const SW = 104, SH = 46, PITCH = 112, BAR = 52, GAP = 8, HCW = 64;
 const W = 2420, H = 1560;
 const TABLES = [];
 function hTable(id, x, y, top, bottom, opts = {}) {
@@ -305,6 +308,10 @@ function hTable(id, x, y, top, bottom, opts = {}) {
   if (opts.endLeft) t.seats.push({ x: x - SW - GAP, y: y + (BAR - SH) / 2 });
   for (let i = 0; i < top; i++) t.seats.push({ x: x + i * PITCH, y: y - SH - GAP });
   for (let i = bottom - 1; i >= 0; i--) t.seats.push({ x: x + i * PITCH, y: y + BAR + GAP });
+  // High chairs are appended last so adding one never renumbers the seats already assigned.
+  const hy = y + (BAR - SH) / 2;
+  if (opts.highChairLeft) t.seats.push({ x: x - HCW - GAP, y: hy, hc: true });
+  if (opts.highChairRight) t.seats.push({ x: x + w + GAP, y: hy, hc: true });
   TABLES.push(t);
 }
 function vTable(id, x, y, left, right) {
@@ -317,7 +324,7 @@ function vTable(id, x, y, left, right) {
 hTable(2, 150, 300, 5, 5, { dark: true });
 hTable(3, 150, 470, 5, 5, { dark: true });
 hTable(4, 150, 770, 5, 5, { dark: true });
-hTable(5, 150, 940, 5, 5, { dark: true });
+hTable(5, 150, 940, 5, 5, { dark: true, highChairRight: true });
 hTable(6, 780, 340, 4, 4);
 hTable(7, 780, 510, 4, 4);
 hTable(8, 780, 680, 4, 4);
@@ -328,7 +335,7 @@ hTable(11, 1830, 340, 5, 5, { dark: true });
 hTable(12, 1830, 530, 5, 5, { dark: true });
 hTable(13, 1180, 1200, 5, 5, { dark: true });
 hTable(14, 1180, 1370, 5, 4, { dark: true });
-hTable(15, 1850, 1200, 4, 4, { dark: true });
+hTable(15, 1850, 1200, 4, 4, { dark: true, highChairRight: true });
 const CAPACITY = TABLES.reduce((a, t) => a + t.seats.length, 0);
 
 function drawRoom(floor) {
@@ -544,12 +551,12 @@ function render() {
     t.seats.forEach((s, i) => {
       const key = seatKey(t.id, i + 1);
       const el = document.createElement('div');
-      el.className = 'seat' + (selected ? ' target' : '');
+      el.className = 'seat' + (s.hc ? ' hc' : '') + (selected ? ' target' : '');
       el.dataset.seat = key;
       Object.assign(el.style, { left: s.x + 'px', top: s.y + 'px' });
       const gid = seats[key];
       if (gid) el.appendChild(chip(guests.get(gid)));
-      else el.innerHTML = `<span class="num">${t.id}·${i + 1}</span>`;
+      else el.innerHTML = `<span class="num">${s.hc ? 'High chair' : `${t.id}·${i + 1}`}</span>`;
       floor.appendChild(el);
     });
   }
