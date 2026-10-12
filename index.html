@@ -300,7 +300,7 @@ const DOC_PATH = 'chart/main';
 // ---------- floor layout ----------
 // Seats are numbered in circular order: top row left→right, then bottom row right→left.
 const SW = 104, SH = 46, PITCH = 112, BAR = 52, GAP = 8, HCW = 64;
-const W = 2420, H = 1560;
+const W = 2480, H = 1560;
 const TABLES = [];
 function hTable(id, x, y, top, bottom, opts = {}) {
   const n = Math.max(top, bottom), w = n * PITCH - (PITCH - SW);
@@ -324,7 +324,7 @@ function vTable(id, x, y, left, right) {
 hTable(2, 150, 300, 5, 5, { dark: true });
 hTable(3, 150, 470, 5, 5, { dark: true });
 hTable(4, 150, 770, 5, 5, { dark: true });
-hTable(5, 150, 940, 5, 5, { dark: true, highChairRight: true });
+hTable(5, 150, 940, 5, 5, { dark: true });
 hTable(6, 780, 340, 4, 4);
 hTable(7, 780, 510, 4, 4);
 hTable(8, 780, 680, 4, 4);
@@ -332,7 +332,7 @@ hTable(9, 780, 850, 4, 4);
 hTable(10, 1352, 340, 4, 4, { endLeft: true });
 vTable(1, 1430, 560, 6, 6);
 hTable(11, 1830, 340, 5, 5, { dark: true });
-hTable(12, 1830, 530, 5, 5, { dark: true });
+hTable(12, 1830, 530, 5, 5, { dark: true, highChairRight: true });
 hTable(13, 1180, 1200, 5, 5, { dark: true });
 hTable(14, 1180, 1370, 5, 4, { dark: true });
 hTable(15, 1850, 1200, 4, 4, { dark: true, highChairRight: true });
