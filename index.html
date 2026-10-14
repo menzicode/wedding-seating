@@ -264,6 +264,7 @@ main { grid-area: main; overflow: auto; min-height: 0; padding: 16px; }
     <button id="undo">Undo</button>
     <button id="reset">Reset to suggested</button>
     <button id="clear">Unseat everyone</button>
+    <button id="poster">Printable chart</button>
     <button id="export-pdf">Export PDF</button>
     <button class="primary" id="export">Export CSV</button>
     <button id="lock-btn" title="Forget the password on this device">Lock</button>
@@ -963,6 +964,94 @@ document.getElementById('export-pdf').onclick = async () => {
   try { (await buildPdf()).save('seating-chart.pdf'); }
   catch (e) { toast('Could not build the PDF. Check your connection and try again.'); }
   btn.disabled = false; btn.textContent = 'Export PDF';
+};
+
+// ---------- printable poster ----------
+// Two 24×36in "Find Your Seat" pages, by table and by last name, opened in a new window to print or save as PDF.
+const POSTER_CSS = `
+@page { size: 24in 36in; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #888; }
+.page {
+  width: 24in; height: 36in; background: #232d19; color: #f4f1ea; overflow: hidden;
+  display: flex; flex-direction: column; align-items: center; padding: 1.7in 1.5in 1.5in;
+  page-break-after: always; break-after: page; margin: 0 auto 0.5in;
+}
+.page:last-child { page-break-after: auto; break-after: auto; margin-bottom: 0; }
+@media print { html, body { background: none; } .page { margin: 0; } }
+h1 { font: 400 2.7in/1 "Pinyon Script", cursive; margin: 0 0 0.35in; text-align: center; white-space: nowrap; }
+.sub { font: 500 0.24in "Montserrat", sans-serif; letter-spacing: 0.32em; text-transform: uppercase; color: #cfc6a8; margin: -0.1in 0 0.6in; }
+.grid { flex: 1; min-height: 0; width: 100%; display: flex; flex-wrap: wrap; justify-content: center; align-content: space-between; gap: 0.7in 0.6in; padding-top: 0.25in; }
+.grid .card { width: calc((100% - 1.8in) / 4); height: calc((100% - 2.1in) / 4); }
+.cols { flex: 1; width: 100%; column-count: 5; column-gap: 0.45in; column-fill: balance; padding-top: 0.25in; }
+.card {
+  position: relative; background: #f1eee8; color: #6b2433; text-align: center;
+  padding: 0.55in 0.25in 0.4in; box-shadow: 0.05in 0.07in 0 rgba(0, 0, 0, 0.35);
+  display: flex; flex-direction: column; align-items: center;
+}
+/* Padding, not margin, above each card: margins collapse at column breaks and would clip the pin. */
+.cols .slot { break-inside: avoid; page-break-inside: avoid; padding: 0.3in 0 0.2in; }
+.cols .card { display: block; padding: 0.45in 0.3in 0.3in; }
+.pin {
+  position: absolute; top: -0.22in; left: 50%; width: 0.46in; height: 0.46in; margin-left: -0.23in; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff3c4 0, #d9bd73 22%, #a8873e 55%, #6e5524 100%);
+}
+.card h2 { font: 400 0.95in/1 "Pinyon Script", cursive; color: #3a1d18; margin: 0 0 0.3in; }
+.cols .card h2 { font-size: 1in; margin-bottom: 0.15in; }
+.name {
+  font: 500 0.25in/1.5 "Montserrat", sans-serif; letter-spacing: 0.14em; text-transform: uppercase;
+  white-space: nowrap; max-width: 100%;
+}
+.row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.15in; text-align: left; }
+.row .name { font-size: 0.27in; letter-spacing: 0.06em; overflow: hidden; flex: 1; min-width: 0; }
+.name.wrap { white-space: normal; line-height: 1.25; padding: 0.06in 0; }
+.row .tbl { font: 400 0.48in/1 "Pinyon Script", cursive; color: #3a1d18; flex: none; }
+`;
+// Shrinks a name too wide for its card a little; if it still doesn't fit, wraps it onto two lines at full size.
+const POSTER_FIT = `document.fonts.ready.then(() => {
+  document.querySelectorAll('.name').forEach(n => {
+    const full = parseFloat(getComputedStyle(n).fontSize);
+    let size = full;
+    while (n.scrollWidth > n.clientWidth + 1 && size > full * 0.82) { size -= 0.5; n.style.fontSize = size + 'px'; }
+    if (n.scrollWidth > n.clientWidth + 1) { n.style.fontSize = ''; n.classList.add('wrap'); }
+  });
+  if (window.opener) setTimeout(() => print(), 300);
+});`;
+// Surname for sorting: skips suffixes like "III" and keeps capitalized prefixes ("Del Vecchio" files under D).
+function lastName(g) {
+  const w = g.name.trim().split(/\s+/);
+  while (w.length > 1 && /^(jr|sr|ii|iii|iv)\.?$/i.test(w[w.length - 1])) w.pop();
+  let i = w.length - 1;
+  if (i > 1 && /^(Del|De|Della|Di|Da|Van|Von|La|Le|St\.?)$/.test(w[i - 1])) i--;
+  return w.slice(i).join(' ');
+}
+function posterHtml() {
+  const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const pin = '<div class="pin"></div>';
+  const tableOf = {};
+  const cards = TABLES.slice().sort((a, b) => a.id - b.id).map(t => {
+    const names = t.seats.map((_, i) => guests.get(seats[seatKey(t.id, i + 1)])).filter(Boolean);
+    names.forEach(g => { tableOf[g.id] = t.id; });
+    if (!names.length) return '';
+    return `<div class="card">${pin}<h2>Table ${t.id}</h2>${names.map(g => `<div class="name">${esc(g.name)}</div>`).join('')}</div>`;
+  }).join('');
+  const seated = [...guests.values()].filter(g => tableOf[g.id])
+    .sort((a, b) => lastName(a).localeCompare(lastName(b)) || a.name.localeCompare(b.name));
+  const groups = new Map();
+  seated.forEach(g => { const L = lastName(g)[0].toUpperCase(); if (!groups.has(L)) groups.set(L, []); groups.get(L).push(g); });
+  const letters = [...groups].map(([L, gs]) => `<div class="slot"><div class="card">${pin}<h2>${esc(L)}</h2>${gs.map(g =>
+    `<div class="row"><span class="name">${esc(g.name)}</span><span class="tbl">${tableOf[g.id]}</span></div>`).join('')}</div></div>`).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Find Your Seat</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500&family=Pinyon+Script&display=block" rel="stylesheet">
+<style>${POSTER_CSS}</style></head><body>
+<section class="page"><h1>Find Your Seat</h1><div class="grid">${cards}</div></section>
+<section class="page"><h1>Find Your Seat</h1><div class="sub">By last name</div><div class="cols">${letters}</div></section>
+<script>${POSTER_FIT}<\/script></body></html>`;
+}
+document.getElementById('poster').onclick = () => {
+  const w = window.open('', '_blank');
+  if (!w) return toast('Allow pop-ups to open the printable chart');
+  w.document.open(); w.document.write(posterHtml()); w.document.close();
 };
 
 render();
