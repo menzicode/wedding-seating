@@ -989,13 +989,9 @@ h1 { font: 400 2.7in/1 "Pinyon Script", cursive; margin: 0 0 0.35in; text-align:
   padding: 0.55in 0.25in 0.4in; box-shadow: 0.05in 0.07in 0 rgba(0, 0, 0, 0.35);
   display: flex; flex-direction: column; align-items: center;
 }
-/* Padding, not margin, above each card: margins collapse at column breaks and would clip the pin. */
+/* Padding, not margin, around each card: margins collapse at column breaks. */
 .cols .slot { break-inside: avoid; page-break-inside: avoid; padding: 0.3in 0 0.2in; }
 .cols .card { display: block; padding: 0.45in 0.3in 0.3in; }
-.pin {
-  position: absolute; top: -0.22in; left: 50%; width: 0.46in; height: 0.46in; margin-left: -0.23in; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff3c4 0, #d9bd73 22%, #a8873e 55%, #6e5524 100%);
-}
 .card h2 { font: 400 0.95in/1 "Pinyon Script", cursive; color: #3a1d18; margin: 0 0 0.3in; }
 .cols .card h2 { font-size: 1in; margin-bottom: 0.15in; }
 .name {
@@ -1027,19 +1023,18 @@ function lastName(g) {
 }
 function posterHtml() {
   const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const pin = '<div class="pin"></div>';
   const tableOf = {};
   const cards = TABLES.slice().sort((a, b) => a.id - b.id).map(t => {
     const names = t.seats.map((_, i) => guests.get(seats[seatKey(t.id, i + 1)])).filter(Boolean);
     names.forEach(g => { tableOf[g.id] = t.id; });
     if (!names.length) return '';
-    return `<div class="card">${pin}<h2>Table ${t.id}</h2>${names.map(g => `<div class="name">${esc(g.name)}</div>`).join('')}</div>`;
+    return `<div class="card"><h2>Table ${t.id}</h2>${names.map(g => `<div class="name">${esc(g.name)}</div>`).join('')}</div>`;
   }).join('');
   const seated = [...guests.values()].filter(g => tableOf[g.id])
     .sort((a, b) => lastName(a).localeCompare(lastName(b)) || a.name.localeCompare(b.name));
   const groups = new Map();
   seated.forEach(g => { const L = lastName(g)[0].toUpperCase(); if (!groups.has(L)) groups.set(L, []); groups.get(L).push(g); });
-  const letters = [...groups].map(([L, gs]) => `<div class="slot"><div class="card">${pin}<h2>${esc(L)}</h2>${gs.map(g =>
+  const letters = [...groups].map(([L, gs]) => `<div class="slot"><div class="card"><h2>${esc(L)}</h2>${gs.map(g =>
     `<div class="row"><span class="name">${esc(g.name)}</span><span class="tbl">${tableOf[g.id]}</span></div>`).join('')}</div></div>`).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>Find Your Seat</title>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500&family=Pinyon+Script&display=block" rel="stylesheet">
