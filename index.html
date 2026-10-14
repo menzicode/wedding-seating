@@ -967,43 +967,43 @@ document.getElementById('export-pdf').onclick = async () => {
 };
 
 // ---------- printable poster ----------
-// Two 24×36in "Find Your Seat" pages, by table and by last name, opened in a new window to print or save as PDF.
+// Two 36×48in "Find Your Seat" pages, by table and by last name, opened in a new window to print or save as PDF.
 // Absolute so it resolves inside the about:blank print window.
 const POSTER_BORDER = new URL('poster-border.jpg', location.href).href;
 const POSTER_CSS = `
-@page { size: 24in 36in; margin: 0; }
+@page { size: 36in 48in; margin: 0; }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: #888; }
 .page {
-  width: 24in; height: 36in; overflow: hidden; padding: 1.35in;
+  /* Laid out at 24×32in and zoomed 1.5× to fill the 36×48in sheet. */
+  width: 24in; height: 32in; zoom: 1.5; overflow: hidden; padding: 1.2in;
   background: #e9e2cf url("${POSTER_BORDER}") center / 8in auto repeat;
   -webkit-print-color-adjust: exact; print-color-adjust: exact;
   page-break-after: always; break-after: page; margin: 0 auto 0.5in;
 }
 .inner {
   height: 100%; background: #232d19; color: #f4f1ea; outline: 0.06in solid #e9e2cf;
-  box-shadow: 0 0 0.35in rgba(0, 0, 0, 0.35);
-  display: flex; flex-direction: column; align-items: center; padding: 1in 0.9in 0.9in;
+  display: flex; flex-direction: column; align-items: center; padding: 0.85in 0.9in 0.8in;
 }
 .page:last-child { page-break-after: auto; break-after: auto; margin-bottom: 0; }
 @media print { html, body { background: none; } .page { margin: 0; } }
-h1 { font: 400 2.3in/1 "Pinyon Script", cursive; margin: 0 0 0.35in; text-align: center; white-space: nowrap; }
-.sub { font: 500 0.24in "Montserrat", sans-serif; letter-spacing: 0.32em; text-transform: uppercase; color: #cfc6a8; margin: -0.1in 0 0.6in; }
-.grid { flex: 1; min-height: 0; width: 100%; display: flex; flex-wrap: wrap; justify-content: center; align-content: space-between; gap: 0.55in 0.5in; padding-top: 0.25in; }
-.grid .card { width: calc((100% - 1.5in) / 4); height: calc((100% - 1.65in) / 4); }
+h1 { font: 400 1.9in/1 "Pinyon Script", cursive; margin: 0 0 0.3in; text-align: center; white-space: nowrap; }
+.sub { font: 500 0.24in "Montserrat", sans-serif; letter-spacing: 0.32em; text-transform: uppercase; color: #cfc6a8; margin: -0.1in 0 0.3in; }
+.grid { flex: 1; min-height: 0; width: 100%; display: flex; flex-wrap: wrap; justify-content: center; align-content: space-between; gap: 0.42in 0.45in; padding-top: 0.2in; }
+.grid .card { width: calc((100% - 1.35in) / 4); height: calc((100% - 1.26in) / 4); }
 .cols { flex: 1; width: 100%; column-count: 5; column-gap: 0.4in; column-fill: balance; padding-top: 0.25in; }
 .card {
   position: relative; background: #f1eee8; color: #6b2433; text-align: center;
-  padding: 0.55in 0.25in 0.4in; box-shadow: 0.05in 0.07in 0 rgba(0, 0, 0, 0.35);
+  padding: 0.42in 0.22in 0.3in; box-shadow: 0.05in 0.07in 0 rgba(0, 0, 0, 0.35);
   display: flex; flex-direction: column; align-items: center;
 }
 /* Padding, not margin, around each card: margins collapse at column breaks. */
-.cols .slot { break-inside: avoid; page-break-inside: avoid; padding: 0.3in 0 0.2in; }
-.cols .card { display: block; padding: 0.4in 0.22in 0.28in; }
-.card h2 { font: 400 0.95in/1 "Pinyon Script", cursive; color: #3a1d18; margin: 0 0 0.3in; }
-.cols .card h2 { font-size: 1in; margin-bottom: 0.15in; }
+.cols .slot { break-inside: avoid; page-break-inside: avoid; padding: 0.22in 0 0.12in; }
+.cols .card { display: block; padding: 0.3in 0.22in 0.22in; }
+.card h2 { font: 400 0.85in/1 "Pinyon Script", cursive; color: #3a1d18; margin: 0 0 0.2in; }
+.cols .card h2 { font-size: 0.85in; margin-bottom: 0.1in; }
 .name {
-  font: 500 0.25in/1.45 "Montserrat", sans-serif; letter-spacing: 0.14em; text-transform: uppercase;
+  font: 500 0.25in/1.35 "Montserrat", sans-serif; letter-spacing: 0.14em; text-transform: uppercase;
   white-space: nowrap; max-width: 100%;
 }
 .row { display: flex; align-items: baseline; justify-content: space-between; gap: 0.15in; text-align: left; }
